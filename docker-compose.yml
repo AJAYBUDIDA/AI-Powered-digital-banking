@@ -1,0 +1,68 @@
+version: '3.8'
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: bank-mysql
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: digital_banking
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/schema.sql
+    networks:
+      - banking-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  ai-service:
+    build: ./ai-service
+    container_name: bank-ai-service
+    ports:
+      - "5000:5000"
+    environment:
+      - GEMINI_API_KEY=YOUR_GEMINI_API_KEY_HERE
+    networks:
+      - banking-network
+
+  backend:
+    build: ./backend
+    container_name: bank-backend
+    ports:
+      - "8080:8080"
+    environment:
+      - MYSQL_HOST=mysql
+      - MYSQL_PORT=3306
+      - MYSQL_DATABASE=digital_banking
+      - MYSQL_USER=root
+      - MYSQL_PASSWORD=root
+      - AI_SERVICE_URL=http://ai-service:5000
+    depends_on:
+      mysql:
+        condition: service_healthy
+      ai-service:
+        condition: service_started
+    networks:
+      - banking-network
+
+  frontend:
+    build: ./frontend
+    container_name: bank-frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    networks:
+      - banking-network
+
+volumes:
+  mysql-data:
+
+networks:
+  banking-network:
+    driver: bridge
